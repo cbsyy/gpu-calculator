@@ -1,0 +1,89 @@
+name: 定时抓取开源模型列表
+
+on:
+  schedule:
+    # 每天北京时间上午9点执行 (UTC时间凌晨1点)
+    - cron: '0 1 * * *'
+  workflow_dispatch: # 允许手动触发
+  push:
+    branches: [ main, master ]
+    paths:
+      - 'scripts/fetch-models.js'
+      - '.github/workflows/fetch-models.yml'
+
+jobs:
+  fetch-models:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: 检出代码
+      uses: actions/checkout@v4
+      with:
+        token: ${{ secrets.GITHUB_TOKEN }}
+        
+    - name: 设置Node.js环境
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+        cache: 'npm'
+        
+    - name: 安装依赖
+      run: |
+        npm install axios cheerio
+        
+    - name: 创建配置目录
+      run: |
+        mkdir -p src/config
+        
+    - name: 抓取模型数据
+      run: |
+        node scripts/fetch-models.js
+        
+    - name: 检查文件变化
+      id: check-changes
+      run: |
+        if git diff --quiet src/config/models.json; then
+          echo "changed=false" >> $GITHUB_OUTPUT
+          echo "没有检测到模型配置变化"
+        else
+          echo "changed=true" >> $GITHUB_OUTPUT
+          echo "检测到模型配置变化"
+        fi
+        
+    - name: 提交更新
+      if: steps.check-changes.outputs.changed == 'true'
+      run: |
+        git config --local user.email "action@github.com"
+        git config --local user.name "GitHub Action"
+        git add src/config/models.json
+        git commit -m "🤖 自动更新开源模型列表 $(date +'%Y-%m-%d %H:%M:%S')"
+        git push
+        
+    - name: 生成摘要报告
+      if: always()
+      run: |
+        echo "## 📊 模型抓取报告" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "- **执行时间**: $(date +'%Y-%m-%d %H:%M:%S UTC')" >> $GITHUB_STEP_SUMMARY
+        echo "- **数据源**: HuggingFace Open LLM Leaderboard" >> $GITHUB_STEP_SUMMARY
+        
+        if [ -f "src/config/models.json" ]; then
+          MODEL_COUNT=$(node -e "const data = require('./src/config/models.json'); console.log(data.total_models || 0);")
+          echo "- **模型总数**: $MODEL_COUNT" >> $GITHUB_STEP_SUMMARY
+          
+          if [ "${{ steps.check-changes.outputs.changed }}" == "true" ]; then
+            echo "- **状态**: ✅ 配置已更新" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "- **状态**: ℹ️ 无变化" >> $GITHUB_STEP_SUMMARY
+          fi
+        else
+          echo "- **状态**: ❌ 抓取失败" >> $GITHUB_STEP_SUMMARY
+        fi
+        
+    - name: 上传配置文件
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: models-config
+        path: src/config/models.json
+        retention-days: 30
