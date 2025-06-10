@@ -45,6 +45,14 @@ export default function Home() {
     setError(null);
     setLoading(true);
 
+    // 添加自动滚动到显存需求分析模块的逻辑
+    setTimeout(() => {
+      const memorySection = document.querySelector('#computer');
+      if (memorySection) {
+        memorySection.scrollIntoView({ behavior: 'smooth' });
+      }
+    }, 100); // 短暂延迟确保状态更新完成
+
     try {
       let config: ModelConfig | null = null;
       
@@ -251,7 +259,7 @@ export default function Home() {
 
       {/* 计算参数设置 */}
       {selectedModel && (
-        <div className="card">
+        <div id="computer" className="card">
           <div className="flex items-center space-x-2 mb-4">
             <Calculator className="w-5 h-5 text-blue-600" />
             <h2 className="text-xl font-semibold">计算参数</h2>
@@ -344,7 +352,7 @@ export default function Home() {
 
       {/* 显存需求结果 */}
       {memoryRequirement && (
-        <div className="card">
+        <div id="memory-analysis" className="card">
           <div className="flex items-center space-x-2 mb-4">
             <Zap className="w-5 h-5 text-blue-600" />
             <h2 className="text-xl font-semibold">显存需求分析</h2>
